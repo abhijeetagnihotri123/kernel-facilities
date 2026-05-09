@@ -1,1 +1,0 @@
-savedcmd_/workspaces/kernel-facilities/ldd/ldd_2_proc_file_read_write/ldd.mod := printf '%s\n'   ldd.o | awk '!x[$$0]++ { print("/workspaces/kernel-facilities/ldd/ldd_2_proc_file_read_write/"$$0) }' > /workspaces/kernel-facilities/ldd/ldd_2_proc_file_read_write/ldd.mod
