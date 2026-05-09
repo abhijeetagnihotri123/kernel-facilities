@@ -15,7 +15,23 @@ ssize_t LDD_READ(struct file *file_pointer,
                  size_t count,
                  loff_t *offset) {
     printk(KERN_INFO "LDD_READ called\n");
-    return 0;
+
+    char msg[] = "Ack!\n";
+    size_t msg_len = sizeof(msg);
+
+    if(*offset >= msg_len){
+        return 0;
+    }
+
+    int result = copy_to_user(
+        user_space_buffer,
+        msg,
+        msg_len
+    );
+
+    *offset += msg_len;
+
+    return msg_len;
 }
 
 static struct proc_ops driver_proc_ops ={
