@@ -8,8 +8,18 @@ MODULE_DESCRIPTION("A simple LDD module");
 
 static struct proc_dir_entry *proc_entry;
 
-static struct proc_ops driver_proc_ops ={
+ssize_t	(*proc_read)(struct file *, char __user *, size_t, loff_t *);
 
+ssize_t LDD_READ(struct file *file_pointer,
+                 char *user_space_buffer,
+                 size_t count,
+                 loff_t *offset) {
+    printk(KERN_INFO "LDD_READ called\n");
+    return 0;
+}
+
+static struct proc_ops driver_proc_ops ={
+    .proc_read = LDD_READ
 };
 
 static int ldd_init(void) {
