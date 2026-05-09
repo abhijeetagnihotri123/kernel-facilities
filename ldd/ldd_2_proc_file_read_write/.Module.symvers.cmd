@@ -1,0 +1,1 @@
+savedcmd_/workspaces/kernel-facilities/ldd/ldd_2_proc_file_read_write/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /workspaces/kernel-facilities/ldd/ldd_2_proc_file_read_write/Module.symvers -T /workspaces/kernel-facilities/ldd/ldd_2_proc_file_read_write/modules.order -i Module.symvers -e 
