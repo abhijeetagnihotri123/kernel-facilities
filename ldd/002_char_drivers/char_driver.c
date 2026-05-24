@@ -7,6 +7,8 @@
 #include <linux/device.h>
 #include <linux/kdev_t.h>
 
+#include <linux/uaccess.h>
+
 #define DEV_MEM_SIZE 512
 
 MODULE_LICENSE("GPL");
@@ -16,6 +18,7 @@ MODULE_DESCRIPTION("A simple LDD module");
 char device_buffer[DEV_MEM_SIZE];
 
 //This holds the device number
+// sudo -i to get permissions to read and write
 dev_t device_number;
 
 int pcd_open (struct inode *pcd_inode, struct file *pcd_file){
@@ -32,19 +35,86 @@ int pcd_release(struct inode *pcd_inode , struct file *pcd_file){
 ssize_t pcd_read(struct file *pcd_file , char __user *buff , size_t count , loff_t *offset){
     
     pr_info("Read requested for %zu bytes\n" , count);
-    return 0;
+    
+    pr_info("Current file position = %lld\n" , *offset);
+
+    if((*offset + count) > DEV_MEM_SIZE){
+        count = DEV_MEM_SIZE - *offset;
+    }
+    if(copy_to_user(buff , &device_buffer[*offset] , count)){
+        return -EFAULT;
+    }
+    
+    *offset += count;
+    
+    pr_info("Number of bytes successfully read = %zu\n" , count);
+    pr_info("Updated file position = %lld\n" , *offset);
+
+    return count;
 }
 
 ssize_t pcd_write (struct file *pcd_file, const char __user *buff, size_t count, loff_t *offset)
 {
     pr_info("Write requested for %zu bytes\n" , count);
-    return 0;
+    pr_info("Current file position = %lld\n" , *offset);
+
+    if((*offset + count) > DEV_MEM_SIZE){
+        count = DEV_MEM_SIZE - *offset; 
+    }
+
+    if(count == 0){
+        return -ENOMEM;
+    }
+
+    if(copy_from_user(&device_buffer[*offset] , buff , count)){
+        return -EFAULT;
+    }
+
+    *offset += count;
+
+
+    pr_info("Number of bytes successfully written = %zu\n" , count);
+    pr_info("Updated file position = %lld\n" , *offset);
+
+    return count;
 }
 
 
 loff_t pcd_llseek (struct file *pcd_file, loff_t offset, int whence){
     pr_info("Lseek requested\n");
-    return 0;
+
+    pr_info("current file position = %lld\n" , pcd_file->f_pos);
+
+    loff_t temp;
+
+    switch(whence){
+        case SEEK_SET:
+            if((offset > DEV_MEM_SIZE) || (offset < 0)){
+                return -EINVAL;
+            }
+            pcd_file->f_pos = offset;
+            break;
+        case SEEK_CUR:
+            temp = pcd_file->f_pos + offset;
+            if(temp > DEV_MEM_SIZE || temp < 0){
+                return -EINVAL;
+            }
+            pcd_file->f_pos += temp;
+            break;
+        case SEEK_END:
+            temp = pcd_file->f_pos + offset;
+            if(temp > DEV_MEM_SIZE || temp < 0){
+                return -EINVAL;
+            }
+            pcd_file->f_pos = temp;
+            break;
+        default:
+            return -EINVAL;
+    }
+
+    pr_info("New value of the file position = %lld\n" , pcd_file->f_pos);
+
+    return pcd_file->f_pos;
 }
 
 
