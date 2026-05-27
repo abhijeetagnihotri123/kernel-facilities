@@ -6,6 +6,7 @@
 #include <linux/uaccess.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
 #include "platform.h"
 
 #define MAX_DEVICE_NUMBER 10
@@ -96,7 +97,17 @@ static int __init pcd_driver_init(void) {
 
 static void __exit pcd_driver_exit(void) {
 
+    /*1. Unregister the platform driver */
     platform_driver_unregister(&pcd_platform_driver);
+
+    /*2. Destroy class */
+    class_destroy(pcdrv_data.class_pcd);
+
+
+    /*3. Unregister the device number for max devices*/
+    unregister_chrdev_region(pcdrv_data.device_base_number , MAX_DEVICE_NUMBER);
+    
+
     pr_info("Driver unregistered");
 
 }
@@ -106,8 +117,97 @@ module_init(pcd_driver_init);
 module_exit(pcd_driver_exit);
 
 int pcd_platform_driver_probe(struct platform_device *pdev){
-    pr_info("%s , A device is detected\n" , __func__);
+    
+    struct pcdev_private_data *dev_data;
+    struct pcdev_platform_data *pdata;
+
+    int ret;
+
+    /*1. Get the platform data*/
+    // or (struct pcdev_platform_data*)dev_get_platdata(&pdev->data)
+
+    pr_info("A device is detected\n");
+
+    pr_info("1. Getting the platform device data");
+    pdata = pdev->dev.platform_data;
+
+    if(!pdata){
+        pr_info("No platform data available\n");
+        ret = -EINVAL;
+        goto out;
+    }
+
+    /*2. Dynamically allocate memory for the device private data*/
+    
+    dev_data = kzalloc(sizeof(struct pcdev_private_data) , GFP_KERNEL);
+
+    pr_info("2. KZAlloc to create memory for device specifications");
+
+    if(!dev_data){
+        pr_info("Cannot allocate memory\n");
+        ret = -ENOMEM;
+        goto out;
+    }
+
+    dev_data->pdata.size = pdata->size;
+    dev_data->pdata.perm = pdata->perm;
+    dev_data->pdata.serial_number = pdata->serial_number;
+
+    pr_info("Size of the device buffer : %d" , dev_data->pdata.size);
+    pr_info("Serial number of the device : %s" , dev_data->pdata.serial_number);
+    pr_info("Permissions the device buffer : %d" , dev_data->pdata.perm);
+    
+    pr_info("3. KZAlloc to create data\n");
+
+    dev_data->buffer = kzalloc(dev_data->pdata.size , GFP_KERNEL);
+
+    if(!dev_data->buffer){
+        pr_info("Cannot allocate memory for device buffer\n");
+        ret = -ENOMEM;
+        goto dev_data_free;
+    }
+
+    pr_info("4. Get the base device number + index number\n");
+    dev_data->dev_number = pcdrv_data.device_base_number + pdev->id;
+
+    pr_info("5. Do Cdev init and cdev add\n");
+
+    cdev_init(&dev_data->pcd_cdev , &pcd_fops);
+
+    ret = cdev_add(&dev_data->pcd_cdev , dev_data->dev_number , 1);
+
+    if(ret < 0){
+        pr_err("Cdev add failed\n");
+        goto buffer_free;
+    }
+
+    pr_info("6. Create device files\n");
+    pcdrv_data.device_pcd = device_create(pcdrv_data.class_pcd , NULL , dev_data->dev_number , NULL , "pcd%d" , pdev->id);
+    
+    if(IS_ERR(pcdrv_data.device_pcd)){
+        pr_err("Device creation failed\n");
+        ret = PTR_ERR(pcdrv_data.device_pcd);
+        goto cdev_deletion;
+    }
+
+    pr_info("The probe was successful\n");
+
     return 0;
+
+cdev_deletion:
+    cdev_del(&dev_data->pcd_cdev);
+
+buffer_free:
+    kfree(dev_data->buffer);
+
+
+dev_data_free:
+    kfree(dev_data);
+
+out:
+    pr_info("Device probe failed\n");
+    return ret;
+
 }
 
 void pcd_platform_driver_remove(struct platform_device *pdev){
