@@ -8,6 +8,7 @@
 #include <linux/kdev_t.h>
 
 #include <linux/uaccess.h>
+#include <linux/err.h>
 
 #define DEV_MEM_SIZE 512
 
@@ -139,9 +140,15 @@ struct device *device_pcd;
 static int __init pcd_driver_init(void) {
     printk(KERN_INFO "LDD module initialized\n");
     
+    int ret;
+
     //1. Dynamically allocate a device number
 
-    alloc_chrdev_region(&device_number , 0 , 1 , "pcd_devices");
+    ret = alloc_chrdev_region(&device_number , 0 , 1 , "pcd_devices");
+
+    if(ret < 0){
+        goto out;
+    }
 
     pr_info("%s : Device number <major>:<minor> = %d:%d\n" , __func__ ,  MAJOR(device_number) , MINOR(device_number));
 
@@ -151,17 +158,46 @@ static int __init pcd_driver_init(void) {
     pcd_cdev.owner = THIS_MODULE;
 
     //3. Register a device(cdev structure) with VFS
-    cdev_add(&pcd_cdev , device_number , 1);
+    ret = cdev_add(&pcd_cdev , device_number , 1);
+
+    if(ret < 0){
+        goto unregister_chrdev;
+    }
 
     //4. Create a device class under /sys/class
     class_pcd = class_create("pcd_class");
 
+    if(IS_ERR(class_pcd)){
+        pr_err("Class creation failed\n");
+        ret = PTR_ERR(class_pcd);
+        goto cdev_del;
+    }
+
     //5. Device file creation or populate sysfs with device information
     device_pcd = device_create(class_pcd , NULL , device_number , NULL , "pcd");
+
+    if(IS_ERR(device_pcd)){
+        pr_err("Device creation failed");
+        ret = PTR_ERR(device_pcd);
+        goto class_del;
+    }
 
     pr_info("Module init was successful\n");
 
     return 0;
+class_del:
+    device_destroy(class_pcd , device_number);
+
+cdev_del:
+    cdev_del(&pcd_cdev);
+
+unregister_chrdev:
+    unregister_chrdev_region(device_number , 1);
+
+out:
+    pr_info("Module insertion failed\n");
+    return ret;
+
 }
 
 static void __exit pcd_driver_exit(void) {
