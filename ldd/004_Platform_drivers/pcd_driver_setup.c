@@ -190,7 +190,12 @@ int pcd_platform_driver_probe(struct platform_device *pdev){
         goto cdev_deletion;
     }
 
+    pr_info("Save dev data into pdev for it to be used when free");
+    dev_set_drvdata(&pdev->dev , dev_data);
+
     pr_info("The probe was successful\n");
+
+    pcdrv_data.total_devices++;
 
     return 0;
 
@@ -212,6 +217,23 @@ out:
 
 void pcd_platform_driver_remove(struct platform_device *pdev){
     //return 0;
+
+    struct pcdev_private_data *dev_data = dev_get_drvdata(&pdev->dev);
+
+    pr_info("Device removal is called\n");
+
+    pr_info("1. Remove a device that was created with device_create");
+    device_destroy(pcdrv_data.class_pcd , dev_data->dev_number);
+
+    pr_info("2. Remove a cdev enty");
+    cdev_del(&dev_data->pcd_cdev);
+
+    pr_info("3. Free allocated memory");
+    kfree(dev_data->buffer);
+    kfree(dev_data);
+
+    pcdrv_data.total_devices--;
+
     pr_info("%s , A device is removed\n" , __func__);
 }
 
