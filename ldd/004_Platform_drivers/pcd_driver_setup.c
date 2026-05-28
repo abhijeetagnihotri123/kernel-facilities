@@ -7,6 +7,9 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+
+#include <linux/mod_devicetable.h>
+
 #include "platform.h"
 
 #define MAX_DEVICE_NUMBER 10
@@ -36,10 +39,38 @@ int pcd_platform_driver_probe(struct platform_device *);
 //When the device gets removed
 void pcd_platform_driver_remove(struct platform_device *);
 
+
+struct device_config{
+    int config_item1;
+    int config_item2;
+};
+
+enum pcdev_ids{
+    PCDEV_A1X = 0,
+    PCDEV_B1X
+};
+
+struct device_config pcdev_configs[] = {
+
+    [PCDEV_A1X] = {.config_item1 = 60 , .config_item2 = 21},
+    [PCDEV_B1X] = {.config_item1 = 50 , .config_item2 = 22}
+
+};
+
+
+
+struct platform_device_id pcdevs_ids[] = {
+
+    [PCDEV_A1X] = {.name = "PCDEV-A1X" , .driver_data = PCDEV_A1X},
+    [PCDEV_B1X] = {.name = "PCDEV-B1X" , .driver_data = PCDEV_B1X}
+
+};
+
 struct platform_driver pcd_platform_driver = {
 
     .probe = pcd_platform_driver_probe,
     .remove = pcd_platform_driver_remove,
+    .id_table = pcdevs_ids,
     .driver = {
         .name = "pseudo-char-device"
     }
@@ -157,6 +188,8 @@ int pcd_platform_driver_probe(struct platform_device *pdev){
     pr_info("Serial number of the device : %s" , dev_data->pdata.serial_number);
     pr_info("Permissions the device buffer : %d" , dev_data->pdata.perm);
     
+    pr_info("Config items %d , %d\n" , pcdev_configs[pdev->id_entry->driver_data].config_item1 , pcdev_configs[pdev->id_entry->driver_data].config_item2);
+
     pr_info("3. KZAlloc to create data\n");
 
     dev_data->buffer = kzalloc(dev_data->pdata.size , GFP_KERNEL);
